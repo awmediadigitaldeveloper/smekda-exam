@@ -8,6 +8,8 @@ import android.os.Build
 import android.os.Bundle
 import android.os.UserManager
 import android.view.View
+import android.view.WindowInsets
+import android.view.WindowInsetsController
 import android.view.WindowManager
 import android.widget.Toast
 import io.flutter.embedding.android.FlutterActivity
@@ -83,18 +85,28 @@ class MainActivity : FlutterActivity() {
       WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
       WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
     )
+
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+      // Android 11+: modern API — hides status bar + navigation bar
+      // BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE: bars appear briefly on edge-swipe then auto-hide
       window.setDecorFitsSystemWindows(false)
+      window.insetsController?.let { controller ->
+        controller.hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
+        controller.systemBarsBehavior =
+          WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+      }
+    } else {
+      // Android 10 and below: legacy flags
+      @Suppress("DEPRECATION")
+      window.decorView.systemUiVisibility = (
+        View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+          or View.SYSTEM_UI_FLAG_FULLSCREEN
+          or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+          or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+          or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+          or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+      )
     }
-    @Suppress("DEPRECATION")
-    window.decorView.systemUiVisibility = (
-      View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-        or View.SYSTEM_UI_FLAG_FULLSCREEN
-        or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-        or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-        or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-        or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-    )
   }
 
   private fun stopKioskIfPossible() {
