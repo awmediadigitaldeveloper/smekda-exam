@@ -40,26 +40,22 @@ class MainActivity : FlutterActivity() {
     // Intentionally empty — prevents system from treating this as a voluntary leave
   }
 
-  // Detect and immediately exit split-screen / multi-window mode
+  // Re-enforce fullscreen when split-screen is triggered
   override fun onMultiWindowModeChanged(isInMultiWindowMode: Boolean, newConfig: Configuration) {
     super.onMultiWindowModeChanged(isInMultiWindowMode, newConfig)
     if (isInMultiWindowMode) {
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-        moveTaskToFront(taskId, 0)
-      }
+      applySecureWindowFlags()
     }
   }
 
-  // Prevent picture-in-picture
+  // Re-enforce fullscreen when PiP is triggered
   override fun onPictureInPictureModeChanged(
     isInPictureInPictureMode: Boolean,
     newConfig: Configuration
   ) {
     super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
     if (isInPictureInPictureMode) {
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-        moveTaskToFront(taskId, 0)
-      }
+      applySecureWindowFlags()
     }
   }
 
