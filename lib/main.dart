@@ -16,17 +16,20 @@ final Uri appHomeUrl = Uri.parse('https://smekda-mobile-test.vercel.app/');
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setEnabledSystemUIMode(
-    SystemUiMode.manual,
-    overlays: SystemUiOverlay.values,
+    SystemUiMode.immersiveSticky,
+    overlays: [],
   );
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
-      statusBarColor: Colors.white,
-      systemNavigationBarColor: Colors.white,
-      statusBarIconBrightness: Brightness.dark,
-      systemNavigationBarIconBrightness: Brightness.dark,
+      statusBarColor: Colors.transparent,
+      systemNavigationBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      systemNavigationBarIconBrightness: Brightness.light,
     ),
   );
+  SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+  ]);
 
   runApp(const SmekdaMobileApp());
 }
@@ -58,7 +61,9 @@ class WebAppScreen extends StatefulWidget {
   State<WebAppScreen> createState() => _WebAppScreenState();
 }
 
-class _WebAppScreenState extends State<WebAppScreen> {
+class _WebAppScreenState extends State<WebAppScreen> with WidgetsBindingObserver {
+  static const _allowedTopLevelHosts = <String>{'smekda-mobile-test.vercel.app'};
+
   late final WebViewController _controller;
 
   int _loadingProgress = 0;
@@ -66,13 +71,99 @@ class _WebAppScreenState extends State<WebAppScreen> {
   bool _didStartInitialLoad = false;
   Uri _currentUrl = appHomeUrl;
   String? _mainFrameError;
+  String? _securityMessage;
+  bool _isSecurityLockActive = false;
   _StartupStage _startupStage = _StartupStage.preparing;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _activateExamMode();
     _controller = _buildController();
     _prepareStartup();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  void _activateExamMode() {
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.immersiveSticky,
+      overlays: [],
+    );
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
+    );
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+    ]);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!mounted) {
+      return;
+    }
+
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      _activateSecurityLock(
+        'Aplikasi keluar dari fokus ujian. Silakan kembali ke mode ujian.',
+      );
+      return;
+    }
+
+    if (state == AppLifecycleState.resumed) {
+      _activateExamMode();
+      if (_isSecurityLockActive) {
+        setState(() {
+          _securityMessage = 'Mode ujian aktif. Tetap fokus pada aplikasi.';
+        });
+        _reloadPage();
+      }
+    }
+  }
+
+  void _activateSecurityLock(String message) {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isSecurityLockActive = true;
+      _securityMessage = message;
+    });
+  }
+
+  void _clearSecurityLock() {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isSecurityLockActive = false;
+      _securityMessage = null;
+    });
+  }
+
+  bool _isAllowedTopLevelUri(Uri uri) {
+    if (!uri.hasScheme) {
+      return false;
+    }
+
+    if (!uri.scheme.startsWith('http')) {
+      return true;
+    }
+
+    return _allowedTopLevelHosts.contains(uri.host);
   }
 
   Future<void> _prepareStartup() async {
@@ -172,6 +263,14 @@ class _WebAppScreenState extends State<WebAppScreen> {
               _currentUrl = uri;
             });
 
+            if (!_isAllowedTopLevelUri(uri)) {
+              _activateSecurityLock(
+                'Navigasi ke domain tidak diizinkan dalam mode ujian.',
+              );
+              await _controller.loadRequest(appHomeUrl);
+              return NavigationDecision.prevent;
+            }
+
             if (_shouldOpenExternally(uri)) {
               await _launchExternal(uri);
               return NavigationDecision.prevent;
@@ -249,6 +348,34 @@ class _WebAppScreenState extends State<WebAppScreen> {
         (function() {
           if (window.__smekdaDownloadBridgeInstalled) return;
           window.__smekdaDownloadBridgeInstalled = true;
+
+          document.documentElement.style.webkitTouchCallout = 'none';
+          document.documentElement.style.webkitUserSelect = 'none';
+          document.documentElement.style.msUserSelect = 'none';
+          document.documentElement.style.userSelect = 'none';
+          document.documentElement.style.touchAction = 'manipulation';
+
+          document.addEventListener('contextmenu', function(event) {
+            event.preventDefault();
+          }, true);
+
+          document.addEventListener('keydown', function(event) {
+            const key = event.key.toLowerCase();
+            const blockModifiers = event.ctrlKey || event.metaKey || event.altKey;
+            const forbiddenKeys = ['c', 'x', 'v', 'a', 'p', 's', 'f12'];
+            if (blockModifiers && forbiddenKeys.includes(key)) {
+              event.preventDefault();
+              event.stopPropagation();
+            }
+          }, true);
+
+          document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+              try {
+                window.location.reload();
+              } catch (_) {}
+            }
+          });
 
           async function sendBlobAsDataUrl(blobUrl, fileName) {
             const response = await fetch(blobUrl);
@@ -534,6 +661,13 @@ class _WebAppScreenState extends State<WebAppScreen> {
                       onRetry: _reloadPage,
                     ),
                   ),
+                if (_isSecurityLockActive && _securityMessage != null)
+                  Positioned.fill(
+                    child: _SecurityLockOverlay(
+                      message: _securityMessage!,
+                      onResume: _clearSecurityLock,
+                    ),
+                  ),
               ],
             ),
           ),
@@ -708,6 +842,60 @@ class _ErrorView extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SecurityLockOverlay extends StatelessWidget {
+  const _SecurityLockOverlay({required this.message, required this.onResume});
+
+  final String message;
+  final VoidCallback onResume;
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: Colors.black.withOpacity(0.92),
+      child: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.lock_outline,
+                  size: 72,
+                  color: Colors.white,
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Mode Ujian Terkunci',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  message,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: Colors.white70,
+                    height: 1.5,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                FilledButton(
+                  onPressed: onResume,
+                  child: const Text('Kembali ke Ujian'),
+                ),
+              ],
             ),
           ),
         ),
