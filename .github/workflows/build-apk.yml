@@ -30,16 +30,32 @@ jobs:
     - name: Enable Flutter desktop
       run: flutter config --enable-linux-desktop
 
+    - name: Verify Flutter environment
+      run: |
+        flutter --version
+        flutter doctor -v
+
     - name: Get dependencies
       run: flutter pub get
 
     - name: Build APK
-      run: flutter build apk --release --split-per-abi
+      run: |
+        flutter build apk --release --split-per-abi
+        ls -la build/app/outputs/flutter-apk
 
     - name: Rename APK files
+      shell: bash
       run: |
         cd build/app/outputs/flutter-apk
-        for file in *.apk; do
+        shopt -s nullglob
+        apk_files=( *.apk )
+        if [ ${#apk_files[@]} -eq 0 ]; then
+          echo "ERROR: No APK files found after build"
+          ls -la
+          exit 1
+        fi
+
+        for file in "${apk_files[@]}"; do
           if [[ $file == *"arm64-v8a"* ]]; then
             mv "$file" "smekda_exam-arm64-v8a.apk"
           elif [[ $file == *"armeabi-v7a"* ]]; then
