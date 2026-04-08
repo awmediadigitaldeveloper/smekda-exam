@@ -63,10 +63,16 @@ class WebAppScreen extends StatefulWidget {
 
 class _WebAppScreenState extends State<WebAppScreen> with WidgetsBindingObserver {
   static const _allowedTopLevelHosts = <String>{'smekda-mobile-test.vercel.app'};
+  static const MethodChannel _kioskChannel =
+      MethodChannel('com.smekda.mobiletest/kiosk');
+  static const String _secretExitCode = '4411';
 
   late final WebViewController _controller;
 
   int _loadingProgress = 0;
+  bool _isSecretAreaEnabled = true;
+  int _secretTapCount = 0;
+  DateTime _lastSecretTap = DateTime.now();
   bool _isLoading = true;
   bool _didStartInitialLoad = false;
   Uri _currentUrl = appHomeUrl;
@@ -152,6 +158,70 @@ class _WebAppScreenState extends State<WebAppScreen> with WidgetsBindingObserver
       _isSecurityLockActive = false;
       _securityMessage = null;
     });
+  }
+
+  void _handleSecretAreaTap() {
+    final now = DateTime.now();
+    if (now.difference(_lastSecretTap) > const Duration(seconds: 2)) {
+      _secretTapCount = 0;
+    }
+    _lastSecretTap = now;
+    _secretTapCount += 1;
+
+    if (_secretTapCount >= 7) {
+      _secretTapCount = 0;
+      _promptSecretExit();
+    }
+  }
+
+  Future<void> _promptSecretExit() async {
+    if (!mounted) {
+      return;
+    }
+
+    final controller = TextEditingController();
+    final allowed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Kode Rahasia'),
+          content: TextField(
+            controller: controller,
+            obscureText: true,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Masukkan kode keluar',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(context).pop(
+                  controller.text == _secretExitCode,
+                );
+              },
+              child: const Text('Keluarkan'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (allowed == true) {
+      await _exitKiosk();
+    }
+  }
+
+  Future<void> _exitKiosk() async {
+    try {
+      await _kioskChannel.invokeMethod('exitKiosk');
+    } catch (_) {
+      // ignore
+    }
   }
 
   bool _isAllowedTopLevelUri(Uri uri) {
@@ -661,6 +731,17 @@ class _WebAppScreenState extends State<WebAppScreen> with WidgetsBindingObserver
                       onRetry: _reloadPage,
                     ),
                   ),
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  width: 88,
+                  height: 88,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onTap: _handleSecretAreaTap,
+                    child: const SizedBox.expand(),
+                  ),
+                ),
                 if (_isSecurityLockActive && _securityMessage != null)
                   Positioned.fill(
                     child: _SecurityLockOverlay(

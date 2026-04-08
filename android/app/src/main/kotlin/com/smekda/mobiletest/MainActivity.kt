@@ -3,13 +3,18 @@ package com.smekda.mobiletest
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
+import android.os.Build
 import android.os.Bundle
+import android.os.UserManager
 import android.view.View
 import android.view.WindowManager
 import android.widget.Toast
 import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
+  private val CHANNEL = "com.smekda.mobiletest/kiosk"
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
@@ -29,6 +34,19 @@ class MainActivity : FlutterActivity() {
     enableKioskMode()
   }
 
+  override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+    super.configureFlutterEngine(flutterEngine)
+    MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
+      when (call.method) {
+        "exitKiosk" -> {
+          stopKioskIfPossible()
+          result.success(true)
+        }
+        else -> result.notImplemented()
+      }
+    }
+  }
+
   override fun onWindowFocusChanged(hasFocus: Boolean) {
     super.onWindowFocusChanged(hasFocus)
     if (hasFocus) {
@@ -43,6 +61,15 @@ class MainActivity : FlutterActivity() {
     }
   }
 
+  private fun stopKioskIfPossible() {
+    try {
+      stopLockTask()
+    } catch (_: IllegalStateException) {
+      // No lock task active.
+    }
+    finishAndRemoveTask()
+  }
+
   private fun enableKioskMode() {
     val devicePolicyManager =
       getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
@@ -51,6 +78,12 @@ class MainActivity : FlutterActivity() {
     try {
       if (devicePolicyManager.isDeviceOwnerApp(packageName)) {
         devicePolicyManager.setLockTaskPackages(adminComponent, arrayOf(packageName))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+          devicePolicyManager.setStatusBarDisabled(adminComponent, true)
+        }
+        devicePolicyManager.addUserRestriction(adminComponent, UserManager.DISALLOW_OUTGOING_CALLS)
+        devicePolicyManager.addUserRestriction(adminComponent, UserManager.DISALLOW_SMS)
+        devicePolicyManager.addUserRestriction(adminComponent, UserManager.DISALLOW_USB_FILE_TRANSFER)
         startLockTask()
         return
       }

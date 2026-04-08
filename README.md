@@ -83,6 +83,14 @@ Untuk fitur keamanan enterprise penuh:
    - Gunakan Microsoft Intune, Jamf, atau MDM lainnya
    - Deploy sebagai managed app dengan kiosk policy
 
+## 🔐 Cara Rahasia Keluar dari Aplikasi
+
+Aplikasi sekarang memiliki area rahasia di sudut kiri atas layar.
+
+- Ketuk area tersembunyi sebanyak **7 kali** dalam 2 detik
+- Masukkan kode: `4411`
+- Jika benar, aplikasi akan keluar dari mode ujian
+
 ## ⚠️ Catatan Keamanan
 
 - Fitur keamanan maksimal membutuhkan device owner privileges
