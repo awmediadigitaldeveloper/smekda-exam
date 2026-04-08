@@ -38,34 +38,21 @@ jobs:
     - name: Get dependencies
       run: flutter pub get
 
-    - name: Build APK
+    - name: Build universal APK
       run: |
-        flutter build apk --release --split-per-abi
+        flutter build apk --release
         ls -la build/app/outputs/flutter-apk
 
-    - name: Rename APK files
+    - name: Rename APK file
       shell: bash
       run: |
         cd build/app/outputs/flutter-apk
-        shopt -s nullglob
-        apk_files=( *.apk )
-        if [ ${#apk_files[@]} -eq 0 ]; then
-          echo "ERROR: No APK files found after build"
+        if [ ! -f app-release.apk ]; then
+          echo "ERROR: app-release.apk not found"
           ls -la
           exit 1
         fi
-
-        for file in "${apk_files[@]}"; do
-          if [[ $file == *"arm64-v8a"* ]]; then
-            mv "$file" "smekda_exam-arm64-v8a.apk"
-          elif [[ $file == *"armeabi-v7a"* ]]; then
-            mv "$file" "smekda_exam-armeabi-v7a.apk"
-          elif [[ $file == *"x86_64"* ]]; then
-            mv "$file" "smekda_exam-x86_64.apk"
-          else
-            mv "$file" "smekda_exam.apk"
-          fi
-        done
+        mv app-release.apk smekda_exam.apk
         ls -la *.apk
 
     - name: Upload APK artifacts
