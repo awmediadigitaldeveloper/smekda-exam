@@ -419,26 +419,57 @@ class _WebAppScreenState extends State<WebAppScreen> with WidgetsBindingObserver
           if (window.__smekdaDownloadBridgeInstalled) return;
           window.__smekdaDownloadBridgeInstalled = true;
 
+          // --- Visual security ---
           document.documentElement.style.webkitTouchCallout = 'none';
           document.documentElement.style.webkitUserSelect = 'none';
           document.documentElement.style.msUserSelect = 'none';
           document.documentElement.style.userSelect = 'none';
           document.documentElement.style.touchAction = 'manipulation';
 
+          // --- Block context menu ---
           document.addEventListener('contextmenu', function(event) {
             event.preventDefault();
           }, true);
 
+          // --- Block keyboard shortcuts ---
           document.addEventListener('keydown', function(event) {
             const key = event.key.toLowerCase();
             const blockModifiers = event.ctrlKey || event.metaKey || event.altKey;
-            const forbiddenKeys = ['c', 'x', 'v', 'a', 'p', 's', 'f12'];
+            // Block Ctrl/Meta combinations: copy, cut, paste, select-all, print, save, find, devtools
+            const forbiddenKeys = ['c', 'x', 'v', 'a', 'p', 's', 'f', 'u', 'i', 'j'];
             if (blockModifiers && forbiddenKeys.includes(key)) {
+              event.preventDefault();
+              event.stopPropagation();
+            }
+            // Block F-keys used for devtools / fullscreen toggle
+            const forbiddenFKeys = ['f1','f2','f3','f4','f5','f6','f7','f8','f9','f10','f11','f12'];
+            if (forbiddenFKeys.includes(key)) {
               event.preventDefault();
               event.stopPropagation();
             }
           }, true);
 
+          // --- Block print ---
+          window.print = function() {};
+          window.addEventListener('beforeprint', function(e) { e.stopImmediatePropagation(); }, true);
+
+          // --- Block window.open() popups ---
+          window.open = function() { return null; };
+
+          // --- Block screen capture API (getDisplayMedia) ---
+          try {
+            if (navigator.mediaDevices) {
+              navigator.mediaDevices.getDisplayMedia = function() {
+                return Promise.reject(new Error('Screen capture is disabled in exam mode.'));
+              };
+            }
+          } catch (_) {}
+
+          // --- Block drag & drop (prevent content dragging) ---
+          document.addEventListener('dragstart', function(e) { e.preventDefault(); }, true);
+          document.addEventListener('drop', function(e) { e.preventDefault(); }, true);
+
+          // --- Reload on tab hidden (visibility change) ---
           document.addEventListener('visibilitychange', function() {
             if (document.hidden) {
               try {

@@ -3,6 +3,7 @@ package com.smekda.mobiletest
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.os.UserManager
@@ -15,23 +16,51 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
   private val CHANNEL = "com.smekda.mobiletest/kiosk"
+
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
-    window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-    window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-    window.decorView.systemUiVisibility = (
-      View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-        or View.SYSTEM_UI_FLAG_FULLSCREEN
-        or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-        or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-        or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-        or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-    )
+    applySecureWindowFlags()
   }
 
   override fun onResume() {
     super.onResume()
+    applySecureWindowFlags()
     enableKioskMode()
+  }
+
+  override fun onWindowFocusChanged(hasFocus: Boolean) {
+    super.onWindowFocusChanged(hasFocus)
+    if (hasFocus) {
+      applySecureWindowFlags()
+    }
+  }
+
+  // Prevent home button from removing app from foreground in non-device-owner mode
+  override fun onUserLeaveHint() {
+    // Intentionally empty — prevents system from treating this as a voluntary leave
+  }
+
+  // Detect and immediately exit split-screen / multi-window mode
+  override fun onMultiWindowModeChanged(isInMultiWindowMode: Boolean, newConfig: Configuration) {
+    super.onMultiWindowModeChanged(isInMultiWindowMode, newConfig)
+    if (isInMultiWindowMode) {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        moveTaskToFront(taskId, 0)
+      }
+    }
+  }
+
+  // Prevent picture-in-picture
+  override fun onPictureInPictureModeChanged(
+    isInPictureInPictureMode: Boolean,
+    newConfig: Configuration
+  ) {
+    super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+    if (isInPictureInPictureMode) {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        moveTaskToFront(taskId, 0)
+      }
+    }
   }
 
   override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -42,23 +71,34 @@ class MainActivity : FlutterActivity() {
           stopKioskIfPossible()
           result.success(true)
         }
+        "enableKiosk" -> {
+          enableKioskMode()
+          result.success(true)
+        }
         else -> result.notImplemented()
       }
     }
   }
 
-  override fun onWindowFocusChanged(hasFocus: Boolean) {
-    super.onWindowFocusChanged(hasFocus)
-    if (hasFocus) {
-      window.decorView.systemUiVisibility = (
-        View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-          or View.SYSTEM_UI_FLAG_FULLSCREEN
-          or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-          or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-          or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-          or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-      )
+  private fun applySecureWindowFlags() {
+    window.addFlags(
+      WindowManager.LayoutParams.FLAG_SECURE or
+      WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+      WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
+      WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+    )
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+      window.setDecorFitsSystemWindows(false)
     }
+    @Suppress("DEPRECATION")
+    window.decorView.systemUiVisibility = (
+      View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+        or View.SYSTEM_UI_FLAG_FULLSCREEN
+        or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+        or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+        or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+        or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+    )
   }
 
   private fun stopKioskIfPossible() {
@@ -78,12 +118,35 @@ class MainActivity : FlutterActivity() {
     try {
       if (devicePolicyManager.isDeviceOwnerApp(packageName)) {
         devicePolicyManager.setLockTaskPackages(adminComponent, arrayOf(packageName))
+
+        // Disable status bar (Android 9+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
           devicePolicyManager.setStatusBarDisabled(adminComponent, true)
         }
+
+        // --- Block communications ---
         devicePolicyManager.addUserRestriction(adminComponent, UserManager.DISALLOW_OUTGOING_CALLS)
         devicePolicyManager.addUserRestriction(adminComponent, UserManager.DISALLOW_SMS)
         devicePolicyManager.addUserRestriction(adminComponent, UserManager.DISALLOW_USB_FILE_TRANSFER)
+
+        // --- Block system escape routes ---
+        devicePolicyManager.addUserRestriction(adminComponent, UserManager.DISALLOW_SAFE_BOOT)
+        devicePolicyManager.addUserRestriction(adminComponent, UserManager.DISALLOW_FACTORY_RESET)
+        devicePolicyManager.addUserRestriction(adminComponent, UserManager.DISALLOW_ADD_USER)
+        devicePolicyManager.addUserRestriction(adminComponent, UserManager.DISALLOW_INSTALL_APPS)
+        devicePolicyManager.addUserRestriction(adminComponent, UserManager.DISALLOW_UNINSTALL_APPS)
+        devicePolicyManager.addUserRestriction(adminComponent, UserManager.DISALLOW_MOUNT_PHYSICAL_MEDIA)
+
+        // --- Block network config changes during exam ---
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
+          devicePolicyManager.addUserRestriction(adminComponent, UserManager.DISALLOW_NETWORK_RESET)
+          devicePolicyManager.addUserRestriction(adminComponent, UserManager.DISALLOW_CONFIG_WIFI)
+          devicePolicyManager.addUserRestriction(adminComponent, UserManager.DISALLOW_CONFIG_BLUETOOTH)
+        }
+
+        // --- Block volume adjustment ---
+        devicePolicyManager.addUserRestriction(adminComponent, UserManager.DISALLOW_ADJUST_VOLUME)
+
         startLockTask()
         return
       }
