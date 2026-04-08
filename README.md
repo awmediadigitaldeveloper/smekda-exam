@@ -6,17 +6,22 @@ Flutter Android app berbasis WebView untuk menjalankan:
 
 ## 🚀 Build Otomatis
 
-Aplikasi ini menggunakan GitHub Actions untuk build APK otomatis setiap push ke branch `main`.
+Aplikasi ini menggunakan GitHub Actions untuk build APK dan IPA otomatis setiap push ke branch `main`.
 
-### Download APK
+### Download APK (Android)
 1. Pergi ke tab **Actions** di repository GitHub
-2. Klik workflow **Build Android APK** terbaru
+2. Klik workflow **Build Android APK and iOS IPA** terbaru
 3. Scroll ke bagian **Artifacts**
 4. Download file `smekda-exam-apk.zip`
-5. Extract dan install APK yang sesuai dengan arsitektur device:
-   - `smekda_exam-arm64-v8a.apk` (untuk device modern)
-   - `smekda_exam-armeabi-v7a.apk` (untuk device lama)
-   - `smekda_exam-x86_64.apk` (untuk emulator)
+5. Extract dan install file `smekda_exam.apk` (universal untuk semua device Android)
+
+### Download IPA (iOS)
+1. Pergi ke tab **Actions** di repository GitHub
+2. Klik workflow **Build Android APK and iOS IPA** terbaru
+3. Scroll ke bagian **Artifacts**
+4. Download file `smekda-exam-ipa.zip`
+5. Extract file `smekda_exam.ipa`
+6. Install menggunakan Xcode atau iTunes untuk testing (tidak untuk production)
 
 ## 🔒 Fitur Keamanan Enterprise
 
@@ -49,9 +54,14 @@ Aplikasi ini dilengkapi dengan fitur keamanan tingkat enterprise untuk mencegah 
 
 ## 🏗️ Output Build
 
+### Android
+- APK universal: `build/app/outputs/flutter-apk/smekda_exam.apk`
 - APK debug: `build/app/outputs/flutter-apk/app-debug.apk`
-- APK release: `build/app/outputs/flutter-apk/app-release.apk`
 - AAB release: `build/app/outputs/bundle/release/app-release.aab`
+
+### iOS
+- IPA: `build/ios/iphoneos/smekda_exam.ipa`
+- App bundle: `build/ios/iphoneos/Runner.app`
 
 ## 📁 File Penting untuk Release
 
@@ -61,10 +71,21 @@ Aplikasi ini dilengkapi dengan fitur keamanan tingkat enterprise untuk mencegah 
 
 ## 🛠️ Build Manual
 
+### Android
 ```bash
 flutter pub get
 flutter build apk --release
 flutter build appbundle --release
+```
+
+### iOS (macOS dengan Xcode)
+```bash
+flutter pub get
+flutter build ios --release --no-codesign
+cd build/ios/iphoneos
+mkdir Payload
+cp -r Runner.app Payload/
+zip -r smekda_exam.ipa Payload
 ```
 
 ## 📱 Setup Device untuk Kiosk Mode
@@ -93,6 +114,8 @@ Aplikasi sekarang memiliki area rahasia di sudut kiri atas layar.
 
 ## ⚠️ Catatan Keamanan
 
-- Fitur keamanan maksimal membutuhkan device owner privileges
+- Fitur keamanan maksimal membutuhkan device owner privileges (Android)
 - Untuk testing, gunakan emulator atau device development
 - Production deployment membutuhkan MDM setup
+- iOS build dari GitHub Actions tidak signed, hanya untuk testing
+- Untuk production iOS, gunakan Apple Developer Program dan code signing yang proper

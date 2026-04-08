@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Android APK and iOS IPA
 
 on:
   push:
@@ -8,8 +8,9 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-android:
     runs-on: ubuntu-latest
+    name: Build Android APK
 
     steps:
     - name: Checkout code
@@ -60,4 +61,46 @@ jobs:
       with:
         name: smekda-exam-apk
         path: build/app/outputs/flutter-apk/*.apk
+        retention-days: 30
+
+  build-ios:
+    runs-on: macos-latest
+    name: Build iOS IPA
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.41.6'
+        channel: 'stable'
+
+    - name: Verify Flutter environment
+      run: |
+        flutter --version
+        flutter doctor -v
+
+    - name: Get dependencies
+      run: flutter pub get
+
+    - name: Build iOS
+      run: |
+        flutter build ios --release --no-codesign
+        ls -la build/ios/iphoneos
+
+    - name: Create IPA
+      run: |
+        cd build/ios/iphoneos
+        mkdir Payload
+        cp -r Runner.app Payload/
+        zip -r smekda_exam.ipa Payload
+        ls -la *.ipa
+
+    - name: Upload IPA artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: smekda-exam-ipa
+        path: build/ios/iphoneos/*.ipa
         retention-days: 30
