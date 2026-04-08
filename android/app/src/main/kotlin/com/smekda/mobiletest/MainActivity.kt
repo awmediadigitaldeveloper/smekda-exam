@@ -137,13 +137,6 @@ class MainActivity : FlutterActivity() {
         devicePolicyManager.addUserRestriction(adminComponent, UserManager.DISALLOW_UNINSTALL_APPS)
         devicePolicyManager.addUserRestriction(adminComponent, UserManager.DISALLOW_MOUNT_PHYSICAL_MEDIA)
 
-        // --- Block network config changes during exam ---
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
-          devicePolicyManager.addUserRestriction(adminComponent, UserManager.DISALLOW_NETWORK_RESET)
-          devicePolicyManager.addUserRestriction(adminComponent, UserManager.DISALLOW_CONFIG_WIFI)
-          devicePolicyManager.addUserRestriction(adminComponent, UserManager.DISALLOW_CONFIG_BLUETOOTH)
-        }
-
         // --- Block volume adjustment ---
         devicePolicyManager.addUserRestriction(adminComponent, UserManager.DISALLOW_ADJUST_VOLUME)
 
